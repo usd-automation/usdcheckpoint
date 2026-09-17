@@ -3157,7 +3157,7 @@ const SP_CONFIG = {
   // ── Entra ID App Registration (USD Checkpoint) ───────────────
   clientId: 'ec835b4e-5e89-47f4-8c44-fda4b8996669',
   tenantId: '42f7676c-f455-423c-82f6-dc2d99791af7',
-  redirectUri: window.location.origin,
+  redirectUri: 'https://usd-automation.github.io/usdcheckpoint/',
 
   // ── SharePoint Site ────────────────────────────────────────
   siteUrl: 'sap.sharepoint.com',                     // SAP tenant
@@ -4524,7 +4524,7 @@ function defaultState() {
     notifications: [],
     emailLog: [],
     settings: {
-      appUrl: '',
+      appUrl: 'https://usd-automation.github.io/usdcheckpoint/',
       walkthroughEnabled: true
     }
   };
@@ -4543,7 +4543,8 @@ function loadState() {
         parsed.impersonating = null;
       }
       // Ensure settings object exists for older saved states
-      if (!parsed.settings) parsed.settings = { appUrl: '' };
+      if (!parsed.settings) parsed.settings = { appUrl: 'https://usd-automation.github.io/usdcheckpoint/' };
+      if (!parsed.settings.appUrl) parsed.settings.appUrl = 'https://usd-automation.github.io/usdcheckpoint/';
       // Migrate card audiences: ensure old cards without 'All' or new-format entries get 'All' added
       if (parsed.cards) {
         parsed.cards.forEach(function(c) {
@@ -7752,7 +7753,7 @@ async function executeAnalyticsReminder() {
     var recipients = [{ email: r.email, name: r.name }];
 
     // Build payload with optional CC
-    var appUrl = (state.settings && state.settings.appUrl) ? state.settings.appUrl : '';
+    var appUrl = (state.settings && state.settings.appUrl) ? state.settings.appUrl : 'https://usd-automation.github.io/usdcheckpoint/';
     var htmlBody = '<div style="font-family:\'Segoe UI\',Arial,sans-serif;max-width:600px;margin:0 auto;">';
     htmlBody += '<div style="background:#0070F2;padding:20px 24px;border-radius:8px 8px 0 0;">';
     htmlBody += '<h2 style="color:#fff;margin:0;font-size:20px;">USD Checkpoint</h2></div>';
@@ -9066,7 +9067,7 @@ function renderAdminSettings() {
       <div class="card-body">
         <div class="form-section">
           <h4>Application</h4>
-          <div class="form-group"><label>Application URL</label><input type="url" placeholder="https://your-site.com/usd_checkpoint.html" id="set-app-url" value="${escHtml(state.settings && state.settings.appUrl ? state.settings.appUrl : '')}"><div style="font-size:11px;color:var(--medium-gray);margin-top:4px;">This link will be included in all emails so recipients can open the app directly.</div></div>
+          <div class="form-group"><label>Application URL</label><input type="url" placeholder="https://usd-automation.github.io/usdcheckpoint/" id="set-app-url" value="${escHtml(state.settings && state.settings.appUrl ? state.settings.appUrl : 'https://usd-automation.github.io/usdcheckpoint/')}"><div style="font-size:11px;color:var(--medium-gray);margin-top:4px;">This link will be included in all emails so recipients can open the app directly.</div></div>
           <div class="form-group" style="margin-top:16px;">
             <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
               <input type="checkbox" id="set-walkthrough" ${state.settings && state.settings.walkthroughEnabled !== false ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--sap-blue);cursor:pointer;">
@@ -9342,7 +9343,7 @@ function printCertificate() {
 // Send a real email via Microsoft Graph API /me/sendMail
 // Sends one email with all recipients in the "to" field (batch)
 async function sendGraphEmail(token, recipients, subject, bodyText) {
-  var appUrl = (state.settings && state.settings.appUrl) ? state.settings.appUrl : '';
+  var appUrl = (state.settings && state.settings.appUrl) ? state.settings.appUrl : 'https://usd-automation.github.io/usdcheckpoint/';
 
   // Build HTML body
   var htmlBody = '<div style="font-family:\'Segoe UI\',Arial,sans-serif;max-width:600px;margin:0 auto;">';
@@ -9430,7 +9431,7 @@ function openComposeEmail() {
         '<div class="form-group"><label>Related Quiz (optional)</label><select id="compose-quiz"><option value="">None</option>' + quizOptions + '</select></div>' +
         '<div class="form-group"><label>Subject</label><input type="text" id="compose-subject" placeholder="Email subject" value="New Quiz Published - USD Checkpoint"></div>' +
         '<div class="form-group"><label>Message</label><textarea id="compose-body" rows="6" placeholder="Email body...">A new quiz has been published on USD Checkpoint. Please complete it before the due date.\n\nBest regards,\nUSD Checkpoint Platform</textarea>' +
-        ((state.settings && state.settings.appUrl) ? '<div style="font-size:11px;color:var(--sap-blue);margin-top:6px;">The app link will be embedded as a button in the email automatically.</div>' : '<div style="font-size:11px;color:var(--medium-gray);margin-top:6px;">Set the Application URL in Settings to embed a link button in emails.</div>') +
+        '<div style="font-size:11px;color:var(--sap-blue);margin-top:6px;">The app link (usd-automation.github.io/usdcheckpoint) will be embedded as a button in the email automatically.</div>' +
         '</div>' +
       '</div>' +
     '</div>' +
