@@ -4535,6 +4535,17 @@ function loadState() {
     const raw = localStorage.getItem(STATE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+
+      // ── v195 identity fix: one-time flush of corrupted user mappings ──
+      // The old partial-match bug may have linked users to wrong profiles.
+      // Force a clean re-login from SharePoint on next sign-in.
+      if (!parsed._v195fix) {
+        parsed.currentUser = null;
+        parsed.impersonating = null;
+        parsed.users = [];
+        parsed._v195fix = true;
+      }
+
       // Remove old seed users (from demo versions) — only keep SharePoint-sourced users
       if (parsed.users && parsed.users.some(function(u) { return u.id === 'u1' && u.name === 'Alex Martinez'; })) {
         parsed.users = parsed.users.filter(function(u) { return u.source === 'sharepoint'; });
@@ -4616,6 +4627,17 @@ async function doMSALLogin() {
     }
     msalAccount = loginResp.account;
     const msalEmail = msalAccount.username; // user's email from Entra ID
+
+    // ── Identity guard: if cached user doesn't match the MSAL email, reset the session ──
+    if (state.currentUser) {
+      var cachedUser = state.users.find(function(u) { return u.id === state.currentUser; });
+      if (!cachedUser || cachedUser.email.toLowerCase().trim() !== msalEmail.toLowerCase().trim()) {
+        console.warn('Identity mismatch: cached user ' + (cachedUser ? cachedUser.email : 'null') + ' vs MSAL ' + msalEmail + '. Clearing cached session.');
+        state.currentUser = null;
+        state.impersonating = null;
+        saveState();
+      }
+    }
 
     statusEl.textContent = 'Signed in as ' + msalEmail + '. Looking up your profile...';
 
