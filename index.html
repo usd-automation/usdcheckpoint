@@ -4840,33 +4840,28 @@ async function doMSALLogin() {
     // ── Branch A: Users loaded from SharePoint list (admin path) ──
     var user = null;
     if (userItems) {
-      // Find the user by searching all fields for matching email
+      // Find the user — Priority 1: exact match on the email column (field_9)
       var matchedItem = null;
       var emailFieldName = null;
-      var searchEmail = msalEmail.toLowerCase();
+      var searchEmail = msalEmail.toLowerCase().trim();
 
       for (var i = 0; i < userItems.length; i++) {
-        var fields = userItems[i].fields;
-        var fieldKeys = Object.keys(fields);
-        for (var j = 0; j < fieldKeys.length; j++) {
-          var val = fields[fieldKeys[j]];
-          if (typeof val === 'string' && val.toLowerCase() === searchEmail) {
-            matchedItem = userItems[i];
-            emailFieldName = fieldKeys[j];
-            break;
-          }
+        var emailVal = userItems[i].fields[col.email];
+        if (typeof emailVal === 'string' && emailVal.toLowerCase().trim() === searchEmail) {
+          matchedItem = userItems[i];
+          emailFieldName = col.email;
+          break;
         }
-        if (matchedItem) break;
       }
 
-      // If no exact match, try partial match
+      // Priority 2: exact match on any field (handles cases where email column name differs)
       if (!matchedItem) {
         for (var i = 0; i < userItems.length; i++) {
           var fields = userItems[i].fields;
           var fieldKeys = Object.keys(fields);
           for (var j = 0; j < fieldKeys.length; j++) {
             var val = fields[fieldKeys[j]];
-            if (typeof val === 'string' && val.toLowerCase().indexOf(searchEmail) !== -1) {
+            if (typeof val === 'string' && val.toLowerCase().trim() === searchEmail) {
               matchedItem = userItems[i];
               emailFieldName = fieldKeys[j];
               break;
