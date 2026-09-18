@@ -4536,14 +4536,15 @@ function loadState() {
     if (raw) {
       const parsed = JSON.parse(raw);
 
-      // ── v196 identity fix: one-time flush of corrupted user mappings ──
-      // The old all-field scan matched supervisors to their reports' rows.
+      // ── v197 identity fix: one-time flush of corrupted user mappings ──
+      // The old all-field scan in refreshUsersFromSharePoint matched supervisors
+      // to their reports' rows, corrupting the entire user list.
       // Force a clean re-login from SharePoint on next sign-in.
-      if (!parsed._v196fix) {
+      if (!parsed._v197fix) {
         parsed.currentUser = null;
         parsed.impersonating = null;
         parsed.users = [];
-        parsed._v196fix = true;
+        parsed._v197fix = true;
       }
 
       // Remove old seed users (from demo versions) — only keep SharePoint-sourced users
@@ -4569,12 +4570,31 @@ function loadState() {
           }
         });
       }
+      // Cap log sizes to prevent localStorage bloat
+      if (parsed.auditLog && parsed.auditLog.length > 200) parsed.auditLog = parsed.auditLog.slice(-200);
+      if (parsed.emailLog && parsed.emailLog.length > 200) parsed.emailLog = parsed.emailLog.slice(-200);
+      if (parsed.notifications && parsed.notifications.length > 50) parsed.notifications = parsed.notifications.slice(-50);
       return parsed;
     }
   } catch(e) {}
   return defaultState();
 }
-function saveState() { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
+function saveState() {
+  try {
+    localStorage.setItem(STATE_KEY, JSON.stringify(state));
+  } catch(e) {
+    // localStorage quota exceeded — trim audit log and email log, then retry
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      console.warn('localStorage quota exceeded. Trimming logs...');
+      if (state.auditLog && state.auditLog.length > 50) state.auditLog = state.auditLog.slice(-50);
+      if (state.emailLog && state.emailLog.length > 50) state.emailLog = state.emailLog.slice(-50);
+      if (state.notifications && state.notifications.length > 30) state.notifications = state.notifications.slice(-30);
+      try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch(e2) {
+        console.error('saveState failed even after trimming:', e2);
+      }
+    }
+  }
+}
 function resetState() { state = defaultState(); saveState(); }
 
 // ─── AUTH ─────────────────────────────────────────────────────────
@@ -8714,20 +8734,10 @@ async function refreshUsersFromSharePoint(silent) {
     var col = SP_CONFIG.columns;
     var myEmail = (state.msalEmail || cu.email || '').toLowerCase();
 
-    // Discover email field
+    // Use the designated email column ONLY — never scan all fields.
+    // Supervisors' emails appear in field_10 of their reports' rows,
+    // which would corrupt the entire user list if used as the email column.
     var emailField = col.email;
-    for (var i = 0; i < itemsData.value.length; i++) {
-      var flds = itemsData.value[i].fields;
-      var fKeys = Object.keys(flds);
-      for (var j = 0; j < fKeys.length; j++) {
-        var v = flds[fKeys[j]];
-        if (typeof v === 'string' && v.toLowerCase().trim() === myEmail) {
-          emailField = fKeys[j];
-          i = itemsData.value.length;
-          break;
-        }
-      }
-    }
 
     var stats = { total: itemsData.value.length, added: 0, updated: 0 };
     for (var s = 0; s < itemsData.value.length; s++) {
