@@ -5227,6 +5227,16 @@ function canAuthor() {
   return d === 'csr 3' || d === 'supervisor' || d === 'manager';
 }
 
+// Check if a user is exempt from quiz requirements (CSR 3, Supervisors, Managers, STLs)
+// They can still take quizzes voluntarily, but won't appear in overdue lists or reminders.
+function isQuizExempt(user) {
+  if (!user) return false;
+  var d = (user.designation || '').toLowerCase().trim();
+  var r = (user.role || '').toLowerCase().trim();
+  return d === 'csr 3' || d === 'supervisor' || d === 'manager' || d === 'stl'
+    || r === 'admin' || r === 'publisher' || r === 'manager';
+}
+
 // Pages where background sync must NOT re-render (user has unsaved work)
 var _protectedPages = ['create-card', 'create-quiz', 'quiz-player', 'quiz-results'];
 function isOnProtectedPage() {
@@ -5435,6 +5445,8 @@ function checkDueDateReminders() {
   var now = new Date(); now.setHours(0,0,0,0);
   var u = currentUser();
   if (!u) return;
+  // Exempt users do not get due date reminders
+  if (isQuizExempt(u)) return;
   state.cards.filter(function(c) { return c.status === 'published' && c.dueDate; }).forEach(function(c) {
     var due = new Date(c.dueDate); due.setHours(0,0,0,0);
     var diff = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
@@ -5624,8 +5636,8 @@ function renderDashboard(el) {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const firstName = u.name ? u.name.split(' ')[0] : 'there';
 
-  // Pending quizzes
-  const pending = myQuizzes.filter(q => {
+  // Pending quizzes (exempt users see no pending)
+  const pending = isQuizExempt(u) ? [] : myQuizzes.filter(q => {
     const best = getBestAttempt(u.id, q.id);
     return !best || !best.passed;
   });
@@ -5850,7 +5862,7 @@ function renderCategoryLanding(el) {
     var catCards = allCards.filter(function(c) { return c.category === cat.id; });
     var count = catCards.length;
     var publishedCount = catCards.filter(function(c) { return c.status === 'published'; }).length;
-    var overdueCount = catCards.filter(function(c) {
+    var overdueCount = isQuizExempt(u) ? 0 : catCards.filter(function(c) {
       if (!c.dueDate) return false;
       var due = new Date(c.dueDate); due.setHours(0,0,0,0);
       var today = new Date(); today.setHours(0,0,0,0);
@@ -7694,6 +7706,11 @@ function sendAnalyticsReminder() {
   var cu = realUser();
   if (!cu || cu.role !== 'admin') { showToast('Only admins can send reminders.', 'warning'); return; }
   var allRows = window._analyticsUserRows || [];
+  // Exclude quiz-exempt users (supervisors, managers, STLs)
+  allRows = allRows.filter(function(r) {
+    var userObj = state.users.find(function(u) { return u.id === r.id; });
+    return !isQuizExempt(userObj);
+  });
   // Exclude teams led by Catherine, Angel, Joana, Romina, Olsen
   var excludedLeads = ['catherine', 'angel', 'joana', 'romina', 'olsen'];
   var rows = allRows.filter(function(r) {
@@ -8520,11 +8537,8 @@ function renderAnalyticsFiltered(el, filterVal) {
     const quizPool = filteredQuizzes.length ? filteredQuizzes : publishedQuizzes;
     const today = new Date(); today.setHours(0,0,0,0);
 
-    // Exclude users with supervisor/manager designation from the quiz status table
-    const quizStatusUsers = filteredUsers.filter(u => {
-      const desig = (u.designation || '').toLowerCase();
-      return desig.indexOf('supervisor') === -1 && desig.indexOf('manager') === -1;
-    });
+    // Exclude users exempt from quizzes (supervisors, managers, STLs, admins, publishers)
+    const quizStatusUsers = filteredUsers.filter(u => !isQuizExempt(u));
 
     let userRows = quizStatusUsers.map(u => {
       let passedCount = 0, failedCount = 0, notStartedCount = 0, overdueQuizzes = [];
