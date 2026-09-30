@@ -9625,7 +9625,7 @@ function openComposeEmail() {
         '<div class="form-group"><label>To</label>' +
           '<div class="recipient-picker" id="rp-picker" onclick="rpFocus()">' +
             '<div class="recipient-chips" id="rp-chips">' +
-              '<input type="text" class="recipient-search" id="rp-search" placeholder="Search teams, people, or type an email..." oninput="rpFilter()" onfocus="rpOpen()" onkeydown="rpKeydown(event)" autocomplete="off">' +
+              '<input type="text" class="recipient-search" id="rp-search" placeholder="Search teams, people, or type an email..." oninput="rpFilter()" onfocus="rpOpen()" onkeydown="rpKeydown(event)" onpaste="rpPaste(event)" onblur="rpBlur()" autocomplete="off">' +
             '</div>' +
             '<div class="recipient-dropdown" id="rp-dropdown"></div>' +
           '</div>' +
@@ -9683,6 +9683,59 @@ function rpKeydown(e) {
   }
 }
 
+function rpPaste(e) {
+  // Process pasted text after it lands in the input
+  setTimeout(function() {
+    var search = document.getElementById('rp-search');
+    if (!search) return;
+    var raw = search.value;
+    // Split by comma, semicolon, space, or newline to support pasting multiple emails
+    var parts = raw.split(/[,;\s\n]+/).filter(Boolean);
+    var added = 0;
+    parts.forEach(function(part) {
+      var cleaned = part.replace(/[,;\s]/g, '').trim();
+      if (rpIsEmailFormat(cleaned)) {
+        rpAddManualEmail(cleaned);
+        added++;
+      }
+    });
+    // Clear leftover text if we added something
+    if (added > 0) {
+      search = document.getElementById('rp-search');
+      if (search) search.value = '';
+      rpRenderDropdown('');
+    }
+  }, 50);
+}
+
+function rpBlur() {
+  // When the input loses focus, auto-add any valid email sitting in the field
+  setTimeout(function() {
+    var search = document.getElementById('rp-search');
+    if (!search) return;
+    var val = search.value.replace(/[,;\s]/g, '').trim();
+    if (rpIsEmailFormat(val)) {
+      rpAddManualEmail(val);
+      search = document.getElementById('rp-search');
+      if (search) search.value = '';
+    }
+  }, 150);
+}
+
+function rpFlushInput() {
+  // Called before sending — captures any leftover text in the search input
+  var search = document.getElementById('rp-search');
+  if (!search) return;
+  var raw = search.value;
+  var parts = raw.split(/[,;\s\n]+/).filter(Boolean);
+  parts.forEach(function(part) {
+    var cleaned = part.replace(/[,;\s]/g, '').trim();
+    if (rpIsEmailFormat(cleaned)) {
+      rpAddManualEmail(cleaned);
+    }
+  });
+}
+
 function rpClickOutside(e) {
   var picker = document.getElementById('rp-picker');
   if (!picker) { document.removeEventListener('click', rpClickOutside); return; }
@@ -9728,7 +9781,7 @@ function rpRenderChips() {
     var cls = r.type === 'all' ? 'chip-all' : r.type === 'sup' ? 'chip-team' : r.type === 'email' ? 'chip-email' : '';
     html += '<span class="recipient-chip ' + cls + '">' + escHtml(r.label) + '<span class="chip-remove" onclick="event.stopPropagation();rpRemoveChip(' + i + ')">&times;</span></span>';
   });
-  html += '<input type="text" class="recipient-search" id="rp-search" placeholder="' + (composeRecipients.length ? 'Add more...' : 'Search teams, people, or type an email...') + '" oninput="rpFilter()" onfocus="rpOpen()" onkeydown="rpKeydown(event)" autocomplete="off">';
+  html += '<input type="text" class="recipient-search" id="rp-search" placeholder="' + (composeRecipients.length ? 'Add more...' : 'Search teams, people, or type an email...') + '" oninput="rpFilter()" onfocus="rpOpen()" onkeydown="rpKeydown(event)" onpaste="rpPaste(event)" onblur="rpBlur()" autocomplete="off">';
   container.innerHTML = html;
 }
 
@@ -9821,6 +9874,8 @@ function selectEmailTemplate(el, tpl) {
 }
 
 function sendComposeEmail() {
+  // Auto-add any email address left in the search input
+  rpFlushInput();
   var subject = document.getElementById('compose-subject').value.trim();
   var body = document.getElementById('compose-body').value.trim();
   if (!composeRecipients.length) { showToast('Please select at least one recipient.', 'error'); return; }
