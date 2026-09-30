@@ -2619,6 +2619,7 @@ tr:hover td { background: #FAFBFE; }
 }
 .recipient-chip.chip-team { background: #0D9488; }
 .recipient-chip.chip-all { background: #7C3AED; }
+.recipient-chip.chip-email { background: #D97706; }
 .recipient-chip .chip-remove {
   cursor: pointer;
   font-size: 14px;
@@ -9624,7 +9625,7 @@ function openComposeEmail() {
         '<div class="form-group"><label>To</label>' +
           '<div class="recipient-picker" id="rp-picker" onclick="rpFocus()">' +
             '<div class="recipient-chips" id="rp-chips">' +
-              '<input type="text" class="recipient-search" id="rp-search" placeholder="Search teams or people..." oninput="rpFilter()" onfocus="rpOpen()" autocomplete="off">' +
+              '<input type="text" class="recipient-search" id="rp-search" placeholder="Search teams, people, or type an email..." oninput="rpFilter()" onfocus="rpOpen()" onkeydown="rpKeydown(event)" autocomplete="off">' +
             '</div>' +
             '<div class="recipient-dropdown" id="rp-dropdown"></div>' +
           '</div>' +
@@ -9652,6 +9653,34 @@ function rpOpen() {
 function rpClose() {
   var picker = document.getElementById('rp-picker');
   if (picker) picker.classList.remove('open');
+}
+
+function rpIsEmailFormat(str) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str.trim());
+}
+
+function rpAddManualEmail(email) {
+  email = email.trim().toLowerCase();
+  if (!rpIsEmailFormat(email)) return;
+  if (rpIsSelected('email', email)) return;
+  composeRecipients = composeRecipients.filter(function(r) { return r.type !== 'all'; });
+  composeRecipients.push({ type: 'email', value: email, label: email });
+  rpRenderChips();
+  var search = document.getElementById('rp-search');
+  if (search) { search.value = ''; }
+  rpRenderDropdown('');
+}
+
+function rpKeydown(e) {
+  if (e.key === 'Enter' || e.key === 'Tab' || e.key === ',' || e.key === ';') {
+    var search = document.getElementById('rp-search');
+    if (!search) return;
+    var val = search.value.replace(/[,;]/g, '').trim();
+    if (rpIsEmailFormat(val)) {
+      e.preventDefault();
+      rpAddManualEmail(val);
+    }
+  }
 }
 
 function rpClickOutside(e) {
@@ -9696,10 +9725,10 @@ function rpRenderChips() {
   if (!container) return;
   var html = '';
   composeRecipients.forEach(function(r, i) {
-    var cls = r.type === 'all' ? 'chip-all' : r.type === 'sup' ? 'chip-team' : '';
+    var cls = r.type === 'all' ? 'chip-all' : r.type === 'sup' ? 'chip-team' : r.type === 'email' ? 'chip-email' : '';
     html += '<span class="recipient-chip ' + cls + '">' + escHtml(r.label) + '<span class="chip-remove" onclick="event.stopPropagation();rpRemoveChip(' + i + ')">&times;</span></span>';
   });
-  html += '<input type="text" class="recipient-search" id="rp-search" placeholder="' + (composeRecipients.length ? 'Add more...' : 'Search teams or people...') + '" oninput="rpFilter()" onfocus="rpOpen()" autocomplete="off">';
+  html += '<input type="text" class="recipient-search" id="rp-search" placeholder="' + (composeRecipients.length ? 'Add more...' : 'Search teams, people, or type an email...') + '" oninput="rpFilter()" onfocus="rpOpen()" onkeydown="rpKeydown(event)" autocomplete="off">';
   container.innerHTML = html;
 }
 
@@ -9752,7 +9781,19 @@ function rpRenderDropdown(query) {
   }
 
   if (!hasResults) {
-    html = '<div class="rp-empty">No matches found</div>';
+    if (rpIsEmailFormat(q)) {
+      html = '<div class="rp-group-label">Add External Email</div>';
+      var safeEmail = escHtml(q).replace(/'/g, "\\'");
+      html += '<div class="rp-option" onclick="rpAddManualEmail(\'' + safeEmail + '\')">' +
+        '<span class="rp-check" style="color:#0070F2;">&#9993;</span><span class="rp-label">' + escHtml(q) + '</span><span class="rp-meta">Press Enter to add</span></div>';
+    } else {
+      html = '<div class="rp-empty">No matches found' + (q.indexOf('@') !== -1 ? ' — finish typing the email and press Enter' : '') + '</div>';
+    }
+  } else if (q && rpIsEmailFormat(q) && !rpIsSelected('email', q)) {
+    html += '<div class="rp-group-label">Add External Email</div>';
+    var safeEmail2 = escHtml(q).replace(/'/g, "\\'");
+    html += '<div class="rp-option" onclick="rpAddManualEmail(\'' + safeEmail2 + '\')">' +
+      '<span class="rp-check" style="color:#0070F2;">&#9993;</span><span class="rp-label">' + escHtml(q) + '</span><span class="rp-meta">Press Enter to add</span></div>';
   }
   dd.innerHTML = html;
 }
@@ -9788,6 +9829,7 @@ function sendComposeEmail() {
 
   // Build unique recipient list and label
   var recipientIds = {};
+  var manualEmails = [];
   var labels = [];
   composeRecipients.forEach(function(r) {
     if (r.type === 'all') {
@@ -9799,9 +9841,19 @@ function sendComposeEmail() {
     } else if (r.type === 'user') {
       recipientIds[r.value] = true;
       labels.push(r.label);
+    } else if (r.type === 'email') {
+      manualEmails.push({ name: r.value, email: r.value });
+      labels.push(r.value);
     }
   });
   var recipients = state.users.filter(function(u) { return recipientIds[u.id]; });
+  // Add manual email recipients (DLs, external addresses)
+  manualEmails.forEach(function(m) {
+    // Avoid duplicating if already in the user list
+    if (!recipients.some(function(u) { return u.email && u.email.toLowerCase() === m.email.toLowerCase(); })) {
+      recipients.push(m);
+    }
+  });
   var toLabel = labels.join(', ');
   if (toLabel.length > 80) toLabel = toLabel.substring(0, 77) + '...';
 
